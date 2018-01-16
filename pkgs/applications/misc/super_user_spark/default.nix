@@ -5,11 +5,11 @@
 }:
 mkDerivation {
   pname = "super-user-spark";
-  version = "0.3.2.0-dev";
+  version = "0.4.0.0-dev";
   src = fetchgit {
     url = "https://github.com/NorfairKing/super-user-spark";
-    sha256 = "0akyc51bghzkk8j75n0i8v8rrsklidwvljhx3aibxfbkqp33372g";
-    rev = "ab8635682d67842b9e6d909cf3c618014e4157f2";
+    sha256 = "0b7x4nz4d78rc49xjccmafnw9mcss8fd2kv92s93r8c5awsdngy4";
+    rev = "be7625dcaa76e38ccbca37b59ff473d3b4bbf6d7";
   };
   isLibrary = true;
   isExecutable = true;
