@@ -43,6 +43,15 @@ let
       pkgs.which # 88K size
     ];
 
+
+  hasGsettings = builtins.stringLength config.environment.customGSettings == 0;
+  # gsettingsOverride = writeTextFile {
+  #   name = "nixos.gsettings.override";
+  #   destination = "/etc/share/glib-2.0/schemas/nixos.gsettings.override";
+  #   text = config.environment.customGSettings;
+
+  # };
+
 in
 
 {
@@ -81,6 +90,12 @@ in
         description = "List of additional package outputs to be symlinked into <filename>/run/current-system/sw</filename>.";
       };
 
+      customGSettings = mkOption {
+        default = "";
+        type = types.lines;
+        description = "Custom gsettings.";
+      };
+
     };
 
     system = {
@@ -96,9 +111,13 @@ in
 
   };
 
+
   config = {
 
-    environment.systemPackages = requiredPackages;
+    environment.systemPackages = requiredPackages
+      ++ lib.optional hasGsettings pkgs.glib
+      ++ lib.optional hasGsettings pkgs.gtk3
+      ;
 
     environment.pathsToLink =
       [ "/bin"
@@ -144,6 +163,14 @@ in
           if [ -x $out/bin/glib-compile-schemas -a -w $out/share/glib-2.0/schemas ]; then
               $out/bin/glib-compile-schemas $out/share/glib-2.0/schemas
           fi
+
+          mkdir -p $out/share/glib-2.0/schemas
+          cp ${pkgs.gtk3}/share/gsettings-schemas/gtk+3-3.22.26/glib-2.0/schemas/*.xml $out/share/glib-2.0/schemas
+          cat - > $out/share/glib-2.0/schemas/nixos-defaults.gschema.override <<- EOF
+          ${config.environment.customGSettings}
+          EOF
+          ${pkgs.glib.dev}/bin/glib-compile-schemas $out/share/glib-2.0/schemas
+          echo ${pkgs.glib.dev}/bin/glib-compile-schemas
 
           if [ -x $out/bin/update-desktop-database -a -w $out/share/applications ]; then
               $out/bin/update-desktop-database $out/share/applications
