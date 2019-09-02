@@ -9692,6 +9692,8 @@ in
 
   iozone = callPackage ../development/tools/misc/iozone { };
 
+  istioctl = callPackage ../development/tools/istioctl { };
+
   itstool = callPackage ../development/tools/misc/itstool { };
 
   jam = callPackage ../development/tools/build-managers/jam { };
