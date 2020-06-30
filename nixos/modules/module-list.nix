@@ -705,6 +705,7 @@
   ./services/misc/xmrig.nix
   ./services/misc/zoneminder.nix
   ./services/misc/zookeeper.nix
+  ./services/misc/pulsar.nix
   ./services/monitoring/alerta.nix
   ./services/monitoring/apcupsd.nix
   ./services/monitoring/arbtt.nix

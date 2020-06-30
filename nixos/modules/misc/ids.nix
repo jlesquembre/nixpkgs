@@ -356,6 +356,9 @@ in
       rstudio-server = 324;
       localtimed = 325;
       automatic-timezoned = 326;
+      pulsar-zookeeper = 327;
+      pulsar-bookie = 328;
+      pulsar-broker = 329;
 
       # When adding a uid, make sure it doesn't match an existing gid. And don't use uids above 399!
 
