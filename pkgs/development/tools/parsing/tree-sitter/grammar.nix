@@ -23,14 +23,27 @@ stdenv.mkDerivation {
   buildInputs = [ tree-sitter ];
 
   dontUnpack = true;
-  configurePhase= ":";
+  configurePhase = ":";
+  # buildPhase = ''
+  #   runHook preBuild
+  #   scanner_cc="$src/src/scanner.cc"
+  #   if [ ! -f "$scanner_cc" ]; then
+  #     scanner_cc=""
+  #   fi
+  #   $CC -I$src/src/ -shared -o parser -Os $src/src/parser.c $scanner_cc -lstdc++
+  #   runHook postBuild
+  # '';
   buildPhase = ''
     runHook preBuild
     scanner_cc="$src/src/scanner.cc"
     if [ ! -f "$scanner_cc" ]; then
       scanner_cc=""
     fi
-    $CC -I$src/src/ -shared -o parser -Os $src/src/parser.c $scanner_cc -lstdc++
+    scanner_c="$src/src/scanner.c"
+    if [ ! -f "$scanner_c" ]; then
+      scanner_c=""
+    fi
+    $CC -I$src/src/ -shared -o parser -Os $src/src/parser.c $scanner_cc $scanner_c -lstdc++
     runHook postBuild
   '';
   installPhase = ''
