@@ -8,7 +8,7 @@
 , runCommand
 }:
 
-{ fetcher, fetcherArgs, syncFiles, getLastVersion ? null }:
+{ fetcher, fetcherArgs, getLastVersion ? null }:
 
 let
   submodules = fetcherArgs: if fetcherArgs.fetchSubmodules or false then "true" else "false";
@@ -57,8 +57,7 @@ let
           # shellcheck disable=1091
           source ${./utils.sh}
           version=$(${getVersionCmd})
-          nurl_info=$(get_nurl_info "${fetcher}" "${scriptArgs.upstreamUrl}" "$version" "${submodules fetcherArgs}")
-          update_info '${builtins.toJSON fetcherArgs}' '${builtins.toJSON syncFiles}' "$nurl_info"
+          update_info "${fetcher}" "${scriptArgs.upstreamUrl}" "$version" "${submodules fetcherArgs}"
         '';
     };
 in

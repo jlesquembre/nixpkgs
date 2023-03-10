@@ -24,69 +24,40 @@ derivation_version() {
     echo "${version#v}"
 }
 
+# Get path to the info.json file. If called with
+# nix-shell maintainers/scripts/update.nix --argstr package PKG_NAME
+# returns the path in nixpkgs. If not, returns the current working directory
+info_json_path() {
+    if [ -z "${UPDATE_NIX_ATTR_PATH+x}" ]; then
+        echo "info.json"
+    else
+        nixFile=$(nix-instantiate --eval --strict -A "$UPDATE_NIX_ATTR_PATH.meta.position" | sed -re 's/^"(.*):[0-9]+"$/\1/')
+        echo "$(dirname "$nixFile")/info.json"
+    fi
+}
+
 # Input:
 #  - fetcher: fetcher name. E.g.: fetchFromGitHub, fetchgit, ...
 #  - url: Upstream URL. E.g: https://github.com/NixOS/nix
 #  - version: Version to fetch. E.g.: 1.0
 #  - submodules: Fetch submodules, true or false.
 # Output:
-#  JSON with fetcher name, fetcher arguments, version and nix prefetch command
-get_nurl_info() {
+#  Generates a info.json file in the current working directory
+update_info() {
     fetcher=$1
     url=$2
     version=$3
     submodules=$4
 
-    tmp_file="$(mktemp)"
-    trap 'rm -rf -- "$tmp_file"' EXIT
-
-    nurl_out=$(nurl --json --fetcher "$fetcher" "--submodules=$submodules" "$url" "$version" 2> >(tee "$tmp_file" >&2))
-    nix_prefetch_cmd=$(cat "$tmp_file")
-
-    # Remove '$ ' from the command
-    nix_prefetch_cmd=${nix_prefetch_cmd#"$ "}
+    nurl_out=$(nurl --json --fetcher "$fetcher" "--submodules=$submodules" "$url" "$version")
+    info_json=$(info_json_path)
 
     jq -n \
         --arg fetcher "$fetcher" \
         --argjson nurl_out "$nurl_out" \
-        --arg nix_prefetch_cmd "$nix_prefetch_cmd" \
         --arg version "$(derivation_version "$version")" \
         '{"fetcher": $fetcher,
-          "fetcher_args": ($nurl_out.args),
-          "nix_prefetch_cmd": $nix_prefetch_cmd,
+          "fetcherArgs": ($nurl_out.args),
           "version": $version
-         }'
-}
-
-# Input:
-#  - user_args: fetcherArgs values defined by the user
-#  - sync_files: list of files to sync defined by the user
-#  - nurl_info: get_nurl_info output
-# Output:
-#  Copies syncFiles, and generates a info.json file in the current working directory
-update_info() {
-    user_args=$1
-    sync_files=$2
-    nurl_info=$3
-
-    nix_prefetch_cmd="$(jq -r ".nix_prefetch_cmd" <<<"$nurl_info")"
-    storePath="$(eval "$nix_prefetch_cmd" | jq -r ".storePath")"
-
-    # JSON array to bash array
-    declare -a sync_files_array
-    mapfile -t sync_files_array < <(jq -r ".[]" <<<"$sync_files")
-
-    for f in "${sync_files_array[@]}"; do
-        cp -r --no-preserve=mode "${storePath}/${f}" .
-    done
-
-    jq -n \
-        --argjson user_args "$user_args" \
-        --argjson sync_files "$sync_files" \
-        --argjson nurl_info "$nurl_info" \
-        '{"fetcher": ($nurl_info.fetcher),
-          "fetcherArgs": ($user_args + $nurl_info.fetcher_args),
-          "syncFiles": $sync_files,
-          "version": ($nurl_info.version)
-         }' >info.json
+         }' >"$info_json"
 }
