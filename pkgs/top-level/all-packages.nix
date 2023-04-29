@@ -26046,7 +26046,9 @@ with pkgs;
     openssl = openssl_1_1;
   };
 
-  apachePulsar = callPackage ../servers/pulsar { };
+  apachePulsar = callPackage ../servers/pulsar {
+    jdk = jdk17_headless;
+  };
 
   xqilla = callPackage ../development/tools/xqilla { stdenv = gcc10StdenvCompat; };
 

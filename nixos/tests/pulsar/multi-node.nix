@@ -61,9 +61,9 @@ import ../make-test-python.nix ({ pkgs, ...} : {
     # So constantly send a message while we're subscribed.
     status, out = broker.execute(
         "( while true; do"
-        "  ${pkgs.pulsar}/bin/pulsar-client produce test-topic -m foo;"
+        "  ${pkgs.apachePulsar}/bin/pulsar-client produce test-topic -m foo;"
         "  sleep 1; done ) &"
-        " ${pkgs.pulsar}/bin/pulsar-client consume test-topic"
+        " ${pkgs.apachePulsar}/bin/pulsar-client consume test-topic"
         " -s sub1"
     )
     assert status == 0
