@@ -1,6 +1,18 @@
-{ lib, stdenv, fetchurl, installShellFiles, jdk, rlwrap, makeWrapper, writeScript }:
+{ lib
+, stdenvNoCC
+, fetchurl
+, installShellFiles
+, jdk
+, linkFarm
+, makeWrapper
+, rlwrap
+, runCommand
+, writeScript
+, writeShellScriptBin
+, writeTextFile
+}:
 
-stdenv.mkDerivation (finalAttrs: {
+stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "clojure";
   version = "1.11.1.1347";
 
@@ -15,7 +27,7 @@ stdenv.mkDerivation (finalAttrs: {
     makeWrapper
   ];
 
-  # See https://github.com/clojure/brew-install/blob/1.10.3/src/main/resources/clojure/install/linux-install.sh
+  # See https://github.com/clojure/brew-install/blob/1.11.1/src/main/resources/clojure/install/linux-install.sh
   installPhase =
     let
       binPath = lib.makeBinPath [ rlwrap jdk ];
@@ -72,6 +84,70 @@ stdenv.mkDerivation (finalAttrs: {
   '';
 
   passthru.jdk = jdk;
+
+
+  /*
+    Expose clojure dependecies as a list of {name = ...; path = ...;}
+    Later, we use it to create a maven cache in `withMavenCache`.
+
+    We could also extend the cache in another derivation with:
+
+      linkFarm "my-cache" (pkgs.clojure.deps ++ my-deps)
+
+  */
+  passthru.deps = builtins.map
+    ({ mvn-repo, mvn-path, hash }:
+      {
+        name = mvn-path;
+        path = fetchurl { url = "${mvn-repo}/${mvn-path}"; inherit hash; };
+      })
+    (builtins.fromJSON (builtins.readFile ./clojure-deps.json));
+
+
+  /*
+    The default clojure derivation tries to download some extra maven
+    dependecies. That fails if we don't have network access.
+    The main porpuse of `withMavenCache` is to be able to run clojure in a Nix build.
+  */
+  passthru.withMavenCache =
+    let
+      maven-cache = linkFarm "maven-cache" finalAttrs.finalPackage.deps;
+      clj-config = runCommand "clj-config"
+        {
+          nativeBuildInputs = [ finalAttrs.finalPackage ];
+        }
+        ''
+          export CLJ_CONFIG=$out/.clojure
+          mkdir -p $CLJ_CONFIG/tools
+
+          echo '{:mvn/local-repo "${maven-cache}"}' > $CLJ_CONFIG/deps.edn
+          echo "{}" > $CLJ_CONFIG/tools/tools.edn
+        '';
+    in
+    writeShellScriptBin "clojure"
+      ''
+        export CLJ_CONFIG=${clj-config}/.clojure
+        export CLJ_CACHE=$TMPDIR/.clj_cache
+        ${finalAttrs.finalPackage}/bin/clojure "$@"
+      '';
+
+  passthru.tests.clojureWithDeps =
+    let
+      script = writeTextFile {
+        name = "script.clj";
+        text = ''
+          (println (inc 1))
+        '';
+      };
+    in
+    runCommand "clojureWithDeps"
+      {
+        nativeBuildInputs = [ finalAttrs.finalPackage.withMavenCache ];
+      }
+      ''
+        clojure -M -e '(inc 1)'
+        clojure -M ${script} > $out
+      '';
 
   meta = with lib; {
     description = "A Lisp dialect for the JVM";
