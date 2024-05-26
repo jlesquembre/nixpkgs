@@ -4,7 +4,6 @@
   fetchurl,
   fetchpatch,
   fetchFromGitHub,
-  bash,
   pkg-config,
   autoconf,
   cpio,
@@ -32,7 +31,7 @@
   libXcursor,
   libXrandr,
   fontconfig,
-  openjdk22-bootstrap,
+  jdk-bootstrap,
   ensureNewerSourcesForZipFilesHook,
   setJavaClassPath,
   # TODO(@sternenseemann): gtk3 fails to evaluate in pkgsCross.ghcjs.buildPackages
@@ -45,28 +44,36 @@
   gnome_vfs,
   glib,
   GConf,
+  writeShellScript,
+  testers,
 }:
 
 let
-  version = {
-    feature = "22";
-    interim = "";
-    build = "36";
-  };
+
+  # Java version format:
+  # $FEATURE.$INTERIM.$UPDATE.$PATCH
+  # See
+  # https://openjdk.org/jeps/223
+  # https://docs.oracle.com/en/java/javase/22/docs/api/java.base/java/lang/Runtime.Version.html
+
+  featureVersion = "22";
+  info = builtins.getAttr featureVersion (builtins.fromJSON (builtins.readFile ./info.json));
+  version = info.version;
 
   # when building a headless jdk, also bootstrap it with a headless jdk
-  openjdk-bootstrap = openjdk22-bootstrap.override { gtkSupport = !headless; };
+  jdk-bootstrap' = jdk-bootstrap.override { gtkSupport = !headless; };
 in
 
-stdenv.mkDerivation {
+stdenv.mkDerivation (finalAttrs: {
+
   pname = "openjdk" + lib.optionalString headless "-headless";
-  version = "${version.feature}${version.interim}+${version.build}";
+  inherit version;
 
   src = fetchFromGitHub {
     owner = "openjdk";
-    repo = "jdk${version.feature}u";
-    rev = "jdk-${version.feature}${version.interim}+${version.build}";
-    hash = "sha256-itjvIedPwJl/l3a2gIVpNMs1zkbrjioVqbCj1Z1nCJE=";
+    repo = info.repo;
+    rev = "jdk-${version}";
+    hash = info.hash;
   };
 
   nativeBuildInputs = [
@@ -103,7 +110,7 @@ stdenv.mkDerivation {
       libXcursor
       libXrandr
       fontconfig
-      openjdk-bootstrap
+      jdk-bootstrap'
     ]
     ++ lib.optionals (!headless && enableGnome2) [
       gtk3
@@ -153,10 +160,8 @@ stdenv.mkDerivation {
   # https://openjdk.org/groups/build/doc/building.html
   configureFlags =
     [
-      "--with-boot-jdk=${openjdk-bootstrap.home}"
-      "--with-version-build=${version.build}"
-      "--with-version-opt=nixos"
-      "--with-version-pre="
+      "--with-boot-jdk=${jdk-bootstrap'.home}"
+      "--with-version-string=${version}"
       "--enable-unlimited-crypto"
       "--with-native-debug-symbols=internal"
       "--with-libjpeg=system"
@@ -258,14 +263,38 @@ stdenv.mkDerivation {
     done
   '';
 
-  disallowedReferences = [ openjdk-bootstrap ];
+  disallowedReferences = [ jdk-bootstrap' ];
 
-  pos = builtins.unsafeGetAttrPos "feature" version;
-  meta = import ./meta.nix lib version.feature;
+  pos = __curPos;
+
+  meta = import ./meta.nix lib featureVersion;
 
   passthru = {
-    architecture = "";
-    home = ''${placeholder "out"}/lib/openjdk'';
+    updateScript =
+      let
+        java-json = fetchurl {
+          url = "https://search.maven.org/remotecontent?filepath=org/json/json/20240303/json-20240303.jar";
+          hash = "sha256-PPbNaJLjLitMHDng9S9SSKL1s3ZG/fu3mma0a2GEFO0=";
+        };
+      in
+      writeShellScript "update-java" ''
+        ${finalAttrs.finalPackage}/bin/java \
+          -cp ${java-json} \
+          ${./JavaUpdater.java} \
+          22 pkgs/development/compilers/openjdk/info.json
+      '';
+
+    home = "${finalAttrs.finalPackage}/lib/openjdk";
+
     inherit gtk3;
+
+    tests = {
+      version = testers.testVersion {
+        package = finalAttrs.finalPackage;
+        command = "java ${./JavaGetVersion.java}";
+        version = finalAttrs.version;
+      };
+    };
   };
-}
+
+})
