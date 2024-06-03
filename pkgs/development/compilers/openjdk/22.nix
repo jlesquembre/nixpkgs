@@ -31,7 +31,8 @@
 , libXcursor
 , libXrandr
 , fontconfig
-, openjdk22-bootstrap
+# , openjdk22-bootstrap
+, temurin-bin
 , ensureNewerSourcesForZipFilesHook
 , setJavaClassPath
   # TODO(@sternenseemann): gtk3 fails to evaluate in pkgsCross.ghcjs.buildPackages
@@ -39,11 +40,18 @@
 , headless ? stdenv.targetPlatform.isGhcjs
 , enableJavaFX ? false
 , openjfx
-, enableGnome2 ? true
+, enableGnome2 ? stdenv.isLinux
 , gtk3
-, gnome_vfs
 , glib
-, GConf
+, gnome2
+# , gnome_vfs
+# , GConf
+, Cocoa
+, CoreGraphics
+, Foundation
+, libiconv
+, System
+, UserNotifications
 }:
 
 let
@@ -54,7 +62,9 @@ let
   };
 
   # when building a headless jdk, also bootstrap it with a headless jdk
-  openjdk-bootstrap = openjdk22-bootstrap.override { gtkSupport = !headless; };
+  # openjdk-bootstrap = openjdk22-bootstrap.override { gtkSupport = !headless; };
+  # openjdk-bootstrap = temurin-bin.jdk-21.override { gtkSupport = !headless; };
+  openjdk-bootstrap = temurin-bin.override { gtkSupport = !headless; };
 
   openjdk = stdenv.mkDerivation {
     pname = "openjdk" + lib.optionalString headless "-headless";
@@ -77,12 +87,22 @@ let
       zlib
       cups
       freetype
-      alsa-lib
+      # alsa-lib
       libjpeg
       giflib
       libpng
       zlib
       lcms2
+      fontconfig
+      openjdk-bootstrap
+    ] ++ lib.optionals (!headless && enableGnome2) [
+      gtk3
+      gnome2.gnome_vfs
+      gnome2.GConf
+      glib
+    ] ++
+    lib.optionals stdenv.isLinux [
+      alsa-lib
       libX11
       libICE
       libXrender
@@ -94,14 +114,18 @@ let
       libXinerama
       libXcursor
       libXrandr
-      fontconfig
-      openjdk-bootstrap
-    ] ++ lib.optionals (!headless && enableGnome2) [
-      gtk3
-      gnome_vfs
-      GConf
-      glib
-    ];
+    ]
+
+    ++ lib.optionals stdenv.isDarwin [
+      Cocoa
+      CoreGraphics
+      Foundation
+      libiconv
+      System
+      UserNotifications
+    ]
+
+    ;
 
     patches = [
       ./fix-java-home-jdk21.patch
@@ -155,6 +179,12 @@ let
       "--with-zlib=system"
       "--with-lcms=system"
       "--with-stdc++lib=dynamic"
+    ]
+    ++ lib.optionals stdenv.cc.isClang [
+      "--with-toolchain-type=clang"
+      # Explicitly tell Clang to compile C++ files as C++, see
+      # https://github.com/NixOS/nixpkgs/issues/150655#issuecomment-1935304859
+      "--with-extra-cxxflags=-xc++"
     ]
     ++ lib.optional headless "--enable-headless-only"
     ++ lib.optional (!headless && enableJavaFX) "--with-import-modules=${openjfx}";
@@ -248,7 +278,7 @@ let
     disallowedReferences = [ openjdk-bootstrap ];
 
     pos = builtins.unsafeGetAttrPos "feature" version;
-    meta = import ./meta.nix lib version.feature;
+    # meta = import ./meta.nix lib version.feature;
 
     passthru = {
       architecture = "";

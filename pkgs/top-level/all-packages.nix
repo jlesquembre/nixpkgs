@@ -16090,7 +16090,18 @@ with pkgs;
   jdk21 = openjdk21;
   jdk21_headless = openjdk21_headless;
 
-  openjdk22 = javaPackages.compiler.openjdk22;
+  # openjdk22 = javaPackages.compiler.openjdk22;
+  openjdk22 = callPackage ../development/compilers/openjdk/22.nix {
+    inherit (darwin.apple_sdk.frameworks) Cocoa CoreGraphics Foundation UserNotifications System;
+  };
+    # inherit (darwin.apple_sdk.frameworks) CoreServices;
+    # binserve = callPackage ../servers/binserve {
+  # };
+  # wezterm = darwin.apple_sdk_11_0.callPackage ../applications/terminal-emulators/wezterm {
+    # inherit (darwin.apple_sdk_11_0.frameworks) Cocoa CoreGraphics Foundation UserNotifications System;
+  # };
+
+
   openjdk22_headless = javaPackages.compiler.openjdk22.headless;
   jdk22 = openjdk22;
   jdk22_headless = openjdk22_headless;

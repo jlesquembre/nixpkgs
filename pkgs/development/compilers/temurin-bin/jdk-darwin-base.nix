@@ -8,6 +8,7 @@
 , lib, stdenv
 , fetchurl
 , setJavaClassPath
+, gtkSupport ? false
 }:
 
 let
