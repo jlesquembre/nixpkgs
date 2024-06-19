@@ -124,13 +124,6 @@ stdenv.mkDerivation (finalAttrs: {
       sha256 = "082lmc30x64x583vqq00c8y0wqih3y4r0mp1c4bqq36l22qv6b6r";
     })
 
-    # Fix build for gnumake-4.4.1:
-    #   https://github.com/openjdk/jdk/pull/12992
-    (fetchpatch {
-      name = "gnumake-4.4.1";
-      url = "https://github.com/openjdk/jdk/commit/9341d135b855cc208d48e47d30cd90aafa354c36.patch";
-      hash = "sha256-Qcm3ZmGCOYLZcskNjj7DYR85R4v07vYvvavrVOYL8vg=";
-    })
   ] ++ lib.optionals (!headless && enableGnome2) [
     ./swing-use-gtk-jdk13.patch
   ];
