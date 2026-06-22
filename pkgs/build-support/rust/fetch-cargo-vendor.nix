@@ -35,6 +35,7 @@ let
     "version"
     "nativeBuildInputs"
     "hash"
+    "cratesMirrorUrl"
   ];
 
   mkFetchCargoVendorUtil =
@@ -66,6 +67,10 @@ in
   name ? if args ? pname && args ? version then "${args.pname}-${args.version}" else "cargo-deps",
   hash ? (throw "fetchCargoVendor requires a `hash` value to be set for ${name}"),
   nativeBuildInputs ? [ ],
+  # Mirror used to download tarballs. The download URL is constructed as
+  # "${cratesMirrorUrl}/${name}/${version}/download". When null, the default is
+  # used.
+  cratesMirrorUrl ? null,
   ...
 }@args:
 
@@ -106,6 +111,9 @@ let
       outputHash = hash;
       outputHashAlgo = if hash == "" then "sha256" else null;
       outputHashMode = "recursive";
+    }
+    // lib.optionalAttrs (cratesMirrorUrl != null) {
+      env.CARGO_VENDOR_CRATES_MIRROR_URL = cratesMirrorUrl;
     }
     // removeAttrs args removedArgs
   );

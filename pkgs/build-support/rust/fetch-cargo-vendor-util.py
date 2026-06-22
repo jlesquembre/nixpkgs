@@ -2,6 +2,7 @@ import functools
 import hashlib
 import json
 import multiprocessing as mp
+import os
 import re
 import shutil
 import subprocess
@@ -61,6 +62,15 @@ def download_file_with_checksum(session: requests.Session, url: str, destination
     return checksum
 
 
+# Default crates download mirror. Overridable via the
+# CARGO_VENDOR_CRATES_MIRROR_URL environment variable.
+DEFAULT_CRATES_MIRROR_URL = "https://crates.io/api/v1/crates"
+
+
+def get_crates_mirror_url() -> str:
+    return os.environ.get("CARGO_VENDOR_CRATES_MIRROR_URL", DEFAULT_CRATES_MIRROR_URL).rstrip("/")
+
+
 def get_download_url_for_tarball(pkg: dict[str, Any]) -> str:
     # TODO: support other registries
     #       maybe fetch config.json from the registry root and get the dl key
@@ -68,7 +78,7 @@ def get_download_url_for_tarball(pkg: dict[str, Any]) -> str:
     if pkg["source"] != "registry+https://github.com/rust-lang/crates.io-index":
         raise Exception("Only the default crates.io registry is supported.")
 
-    return f"https://crates.io/api/v1/crates/{pkg["name"]}/{pkg["version"]}/download"
+    return f"{get_crates_mirror_url()}/{pkg["name"]}/{pkg["version"]}/download"
 
 
 def download_tarball(session: requests.Session, pkg: dict[str, Any], out_dir: Path) -> None:
