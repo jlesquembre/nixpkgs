@@ -119,6 +119,35 @@ generic fashion with the `--set` argument of `makeWrapper`:
 --set JAVA_HOME ${jdk.home}
 ```
 
+## Custom CA certificates for OpenJDK truststore
+
+OpenJDK packages provide helpers to generate and use a custom Java
+truststore without rebuilding OpenJDK itself.
+
+- `jdk.mkCustomCacerts { ... }` builds a standalone `cacerts` file at
+  `$out/lib/security/cacerts`.
+- `jdk.withExtraCustomCacerts { ... }` returns a wrapped JDK that sets
+  `JAVAX_NET_SSL_TRUSTSTORE` automatically.
+
+Example:
+
+```nix
+let
+  jdk = pkgs.openjdk21_headless.withExtraCustomCacerts {
+    extraCerts = [ ./corp-root.pem ./corp-intermediate.pem ];
+  };
+in {
+  environment.systemPackages = [ jdk ];
+}
+```
+
+Available arguments (both helpers):
+
+- `extraCerts ? [ ]`: extra PEM certificate files to append.
+- `caBundle ? "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"`: base CA bundle.
+- `keytool ? "${jdk}/bin/keytool"`: keytool binary used for truststore generation.
+- `name ? ...`: output derivation name.
+
 It is possible to use a different Java compiler than `javac` from the
 OpenJDK. For instance, to use the GNU Java Compiler:
 

@@ -42,6 +42,9 @@
   fontconfig,
 
   setJavaClassPath,
+  symlinkJoin,
+  makeWrapper,
+  callPackage,
 
   versionCheckHook,
 
@@ -610,6 +613,101 @@ stdenv.mkDerivation (finalAttrs: {
     # Shouldn't this be `jdk-bootstrap = jdk-bootstrap'`?
     inherit jdk-bootstrap;
     inherit (source) updateScript;
+
+    # Build a standalone Java truststore without rebuilding OpenJDK.
+    #
+    # Example:
+    #   myCacerts = pkgs.openjdk21_headless.mkCustomCacerts {
+    #     extraCerts = [ ./corp-root.pem ./corp-intermediate.pem ];
+    #   };
+    #   # truststore path: ${myCacerts}/lib/security/cacerts
+    mkCustomCacerts =
+      {
+        name ? "${finalAttrs.pname}-${finalAttrs.version}-custom-cacerts",
+        extraCerts ? [ ],
+        caBundle ? "${cacert}/etc/ssl/certs/ca-bundle.crt",
+        keytool ? "${finalAttrs.finalPackage}/bin/keytool",
+      }:
+      stdenv.mkDerivation {
+        pname = name;
+        version = "1";
+        dontUnpack = true;
+        installPhase = ''
+          runHook preInstall
+
+          mkdir -p "$out/lib/security"
+          cat ${lib.escapeShellArg caBundle} ${
+            lib.concatMapStringsSep " " lib.escapeShellArg extraCerts
+          } > bundle.crt
+
+          # Build a PKCS12 truststore from the concatenated bundle.
+          # We import each PEM cert separately because keytool cannot import
+          # multiple certificates from a single file at once.
+          awk '
+            /-----BEGIN CERTIFICATE-----/ { in_cert = 1; cert_index += 1; cert_file = sprintf("cert-%06d.pem", cert_index); print > cert_file; next }
+            in_cert { print > cert_file }
+            /-----END CERTIFICATE-----/ { in_cert = 0; close(cert_file) }
+          ' bundle.crt
+
+          export JAVA_TOOL_OPTIONS="-Dkeystore.pkcs12.certProtectionAlgorithm=NONE -Dkeystore.pkcs12.macAlgorithm=NONE"
+          for cert in cert-*.pem; do
+            ${lib.escapeShellArg keytool} \
+              -importcert \
+              -noprompt \
+              -alias "''${cert%.pem}" \
+              -storetype PKCS12 \
+              -keystore cacerts \
+              -storepass changeit \
+              -file "$cert"
+          done
+
+          cp cacerts "$out/lib/security/cacerts"
+
+          runHook postInstall
+        '';
+      };
+
+    # Return a wrapped OpenJDK package that sets JAVAX_NET_SSL_TRUSTSTORE
+    # automatically to a custom truststore generated from caBundle + extraCerts.
+    #
+    # Example:
+    #   jdk = pkgs.openjdk21.withExtraCustomCacerts {
+    #     extraCerts = [ ./corp-root.pem ];
+    #   };
+    #   # use `${jdk}/bin/java` and it will pick the custom truststore by default.
+    withExtraCustomCacerts =
+      {
+        name ? "${finalAttrs.pname}-${finalAttrs.version}-with-extra-cacerts",
+        ...
+      }@args:
+      let
+        customCacerts = finalAttrs.finalPackage.mkCustomCacerts (lib.removeAttrs args [ "name" ]);
+      in
+      symlinkJoin {
+        inherit name;
+        paths = [ finalAttrs.finalPackage ];
+        nativeBuildInputs = [ makeWrapper ];
+        postBuild = ''
+          for prog in "$out"/bin/*; do
+            if [ -f "$prog" ] && [ -x "$prog" ]; then
+              wrapProgram "$prog" \
+                --set-default JAVAX_NET_SSL_TRUSTSTORE ${lib.escapeShellArg "${customCacerts}/lib/security/cacerts"}
+            fi
+          done
+        '';
+        passthru = (lib.removeAttrs finalAttrs.finalPackage.passthru [ "tests" ]) // {
+          inherit customCacerts;
+          unwrapped = finalAttrs.finalPackage;
+        };
+      };
+
+    tests.withExtraCustomCacerts = callPackage ./tests/with-extra-custom-cacerts.nix {
+      jdk = finalAttrs.finalPackage;
+    };
+
+    tests.withExtraCustomCacertsNegative = callPackage ./tests/with-extra-custom-cacerts-negative.nix {
+      jdk = finalAttrs.finalPackage;
+    };
   }
   // lib.optionalAttrs atLeast11 { inherit gtk3; }
   // lib.optionalAttrs (!atLeast23) {
